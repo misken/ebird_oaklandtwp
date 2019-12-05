@@ -1,0 +1,35 @@
+---
+title: "R Notebook"
+output: html_document
+---
+
+```{r libs, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+```
+
+```{r}
+obs <- readRDS("data/observations.rds")
+```
+
+# How many different bird 
+
+```{r}
+sp_bydate <- obs %>% 
+  group_by(obsDt, locName) %>% 
+  summarise(
+    num_species = n()
+  ) 
+  
+```
+
+
+```{r}
+sp_bydate %>% 
+  filter(locName == 'Bear Creek Nature Park')
+```
+
+```{r fig.width=12}
+ggplot(sp_bydate) + geom_col(aes(x = as.Date(obsDt), y = num_species, fill = as.factor(locName))) + facet_grid(locName ~ .)
+```
+

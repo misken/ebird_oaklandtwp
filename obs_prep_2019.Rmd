@@ -1,0 +1,271 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+```
+
+```{r}
+obs_raw <- read.csv("./data/observations_2019.csv")
+```
+
+```{r}
+obs_raw$obsDt <- as.POSIXct(obs_raw$obsDt)
+```
+
+
+```{r}
+obs_raw %>%
+  filter(wday(obsDt) == 4) %>% 
+  group_by(lastName, firstName) %>%
+  count() %>%
+  arrange(desc(n))
+```
+
+
+```{r}
+ot_birders <- c("VanderWeide", "Roland",
+                "Kent")
+```
+
+```{r wed_birders}
+obs <- obs_raw %>%
+  filter(lastName %in% ot_birders & wday(obsDt) == 4)
+```
+
+## Basic overall summaries
+
+Counts of total birds and number of lists by year by species.
+
+```{r numsp_bylist}
+numsp_bylist <- obs %>%
+  group_by(year=year(obsDt), obsDt, subId, lastName) %>%
+    count() %>%
+  arrange(year, subId)
+
+numsp_bylist  
+```
+
+```{r}
+numlists_bydt <- numsp_bylist %>%
+  group_by(obsDt) %>%
+  summarise(
+    numlists = n()
+  ) %>%
+  filter(numlists >= 1) %>%
+  arrange(obsDt)
+
+numlists_bydt
+```
+
+
+```{r}
+obs %>%
+  filter(obsDt %in% numlists_bydt$obsDt[1])
+```
+
+
+```{r}
+numlists_byyear <- numlists_bydt %>%
+    group_by(birding_year=year(obsDt)) %>%
+    summarise(
+      totlists = sum(numlists)
+    )
+```
+
+
+```{r counts_by_year}
+species_byyear <- obs %>%
+  group_by(comName, birding_year=year(obsDt)) %>%
+  summarize(
+    num_lists = n(),
+    tot_birds = sum(howMany)
+  ) %>%
+  arrange(birding_year, desc(tot_birds))
+ 
+species_byyear <- left_join(species_byyear, numlists_byyear, by = 'birding_year') 
+species_byyear
+```
+
+```{r counts_by_monthyear_species}
+commonName = c("Black-capped Chickadee", "Dark-eyed Junco", "Blue-gray Gnatcatcher")
+
+obs %>%
+  filter(comName %in% commonName) %>%
+  group_by(comName, year_month = make_datetime(year(obsDt), month(obsDt))) %>%
+  summarize(
+    num_lists = n(),
+    tot_birds = sum(howMany)
+  ) %>%
+  ggplot() + geom_bar(aes(x=year_month, y=tot_birds), stat = "identity") +
+      facet_grid(comName ~ .)
+  
+```
+
+How to generalize the following by using variables for year and top_n?
+
+```{r}
+top_obs_2018 <- obs %>% 
+  filter(year(obsDt) == 2018) %>%
+  group_by(year=year(obsDt), comName) %>%
+  summarize(
+    num_lists = n(),
+    tot_birds = sum(howMany)
+  ) %>% 
+  top_n(n=30) %>%
+  arrange(desc(tot_birds)) %>% 
+  print()
+```
+
+```{r counts_by_year_plot_2015}
+g <- ggplot(top_obs_2018) + 
+  geom_bar(aes(x=reorder(comName, tot_birds), y=tot_birds, fill=num_lists), stat = "identity") +
+  labs(x="", y="Total number of birds sighted", fill="Number of lists",
+       title = "Top 30 most sighted birds by Wed Birders in 2018",
+       subtitle = "(number at right of bar is number of lists on which the species appeared)") +
+  coord_flip() +
+  geom_text(data=top_obs_2018,
+            aes(x=reorder(comName,tot_birds),y=tot_birds,label=num_lists,hjust=-0.2))
+
+g
+ggsave(g, filename = "top20_2018.png")
+```
+
+
+```{r}
+top_obs_2016 <- obs %>% 
+  filter(year(obsDt) == 2016) %>%
+  group_by(year=year(obsDt), comName) %>%
+  summarize(
+    num_lists = n(),
+    tot_birds = sum(howMany)
+  ) %>% 
+  top_n(n=30) %>%
+  arrange(desc(tot_birds))
+```
+
+```{r counts_by_year_plot_2016}
+g <- ggplot(top_obs_2016) + 
+  geom_bar(aes(x=reorder(comName, tot_birds), y=tot_birds, fill=num_lists), stat = "identity") +
+  labs(x="", y="Total number of birds sighted", fill="Number of lists",
+       title = "Top 30 most sighted birds by Wed Birders in 2016",
+       subtitle = "(number at right of bar is number of lists on which the species appeared)") +
+  coord_flip() +
+  geom_text(data=top_obs_2016,
+            aes(x=reorder(comName,tot_birds),y=tot_birds,label=num_lists,hjust=-0.2))
+
+g
+ggsave(g, filename = "top20_2016.png")
+```
+
+
+
+
+```{r}
+top_obs_2017 <- obs %>% 
+  filter(year(obsDt) == 2017) %>%
+  group_by(year=year(obsDt), comName) %>%
+  summarize(
+    num_lists = n(),
+    tot_birds = sum(howMany)
+  ) %>% 
+  top_n(n=30) %>%
+  arrange(desc(tot_birds))
+```
+
+```{r counts_by_year_plot}
+g <- ggplot(top_obs_2017) + 
+  geom_bar(aes(x=reorder(comName, tot_birds), y=tot_birds, fill=num_lists), stat = "identity") +
+  labs(x="", y="Total number of birds sighted", fill="Number of lists",
+       title = "Top 30 most sighted birds by Wed Birders in 2017",
+       subtitle = "(number at right of bar is number of lists on which the species appeared)") +
+  coord_flip() +
+  geom_text(data=top_obs_2017,
+            aes(x=reorder(comName,tot_birds),y=tot_birds,label=num_lists,hjust=-0.2))
+
+g
+ggsave(g, filename = "top20_2017.png")
+```
+
+
+```{r}
+species_byyear %>%
+       filter(birding_year == 2016) %>%
+       arrange(desc(tot_birds)) %>%
+       head(30)
+```
+
+https://www.nceas.ucsb.edu/~frazier/RSpatialGuides/colorPaletteCheatsheet.pdf
+
+```{r counts_by_year_plot_new}
+
+top_obs_2016 <- species_byyear %>%
+       filter(birding_year == 2016) %>%
+       mutate(pctlists = num_lists / totlists) %>%
+       arrange(desc(tot_birds)) %>%
+       head(30)
+
+g <-  ggplot(top_obs_2016) + 
+  geom_bar(aes(x=reorder(comName, tot_birds), 
+               y=tot_birds, fill=pctlists), stat = "identity") +
+  #scale_fill_gradientn(colours = diverge_hcl(8)) +
+  scale_fill_gradient(low='#05D9F6', high='#5011D1') +
+  labs(x="", y="Total number of birds sighted", fill="Pct of lists",
+       title = "Top 30 most sighted birds by Wed Birders in 2016",
+       subtitle = "(number at right of bar is % of lists on which the species appeared)") +
+  coord_flip() +
+  geom_text(data=top_obs_2016,
+            aes(x=reorder(comName,tot_birds),
+                y=tot_birds,
+                label=format(pctlists, digits = 1),
+                hjust=-0.2
+                ), size=2)
+
+g
+#ggsave(g, filename = "top20_2015.png")
+```
+
+```{r}
+top_obs_2016
+```
+
+
+```{r}
+ggplot(top_obs_2016) + 
+  geom_bar(aes(x=reorder(comName, tot_birds), y=tot_birds, 
+               fill=pctlists), stat = "identity") + coord_flip()
+```
+
+```{r}
+top_obs <- species_byyear %>%
+    mutate(pctlists = num_lists / totlists) %>%
+    arrange(desc(tot_birds)) %>%
+    head(30)
+```
+
+```{r}
+head(top_obs, 10)
+```
+
+```{r}
+g <-  ggplot(top_obs) + 
+    geom_bar(aes(x=reorder(comName, tot_birds), 
+                 y=tot_birds, fill=pctlists), stat = "identity") +
+    #scale_fill_gradientn(colours = diverge_hcl(8)) +
+    scale_fill_gradient(low='#05D9F6', high='#5011D1') +
+    labs(x="", y="Total number of birds sighted", fill="Pct of lists",
+         title = "Top 30 most sighted birds by Wed Birders",
+         subtitle = "(number at right of bar is % of lists on which the species appeared)") +
+    coord_flip() + facet_grid(birding_year ~ .) +
+    geom_text(data=top_obs,
+              aes(x=reorder(comName,tot_birds),
+                  y=tot_birds,
+                  label=format(pctlists, digits = 1),
+                  hjust=0
+              ), size=3)
+```
+
