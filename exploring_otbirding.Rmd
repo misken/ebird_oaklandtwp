@@ -6,6 +6,8 @@ output: html_document
 ```{r libs, warning=FALSE}
 library(dplyr)
 library(ggplot2)
+library(lubridate)
+library(stringr)
 ```
 
 ```{r}
@@ -16,20 +18,28 @@ obs <- readRDS("data/observations.rds")
 
 ```{r}
 sp_bydate <- obs %>% 
-  group_by(obsDt, locName) %>% 
+  group_by(birdingDt, locName) %>% 
   summarise(
     num_species = n()
   ) 
   
 ```
 
+```{r}
+sp_bydate %>% 
+  group_by(locName) %>% 
+  count()
+```
+
 
 ```{r}
 sp_bydate %>% 
-  filter(locName == 'Bear Creek Nature Park')
+  filter(str_detect(locName, 'Draper'))
 ```
 
 ```{r fig.width=12}
-ggplot(sp_bydate) + geom_col(aes(x = as.Date(obsDt), y = num_species, fill = as.factor(locName))) + facet_grid(locName ~ .)
+sp_bydate %>% 
+  filter(str_detect(locName, 'Draper')) %>% 
+ggplot() + geom_line(aes(x = birdingDt, y = num_species, fill = locName)) 
 ```
 
