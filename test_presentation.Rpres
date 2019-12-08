@@ -1,0 +1,84 @@
+test_presentation
+========================================================
+author: Mark Isken
+date: 2019-12-04
+autosize: true
+
+```{r libs, echo=FALSE, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(stringr)
+library(knitr)
+library(kableExtra)
+options("kableExtra.html.bsTable" = T) # Need to so get kableExtra formatting in slides
+```
+
+```{r readdata, echo=FALSE}
+obs <- readRDS("data/observations.rds")
+
+ebird_tax <- read.csv('rawdata/eBird_Taxonomy_v2019.csv', sep = '\t')
+
+obs <- obs %>% 
+  inner_join(ebird_tax, by = c('speciesCode' = 'SPECIES_CODE'))
+
+obs$comFamily <- sub(".*[(](.*?)[)].*", "\\1", obs$FAMILY)
+```
+
+First Slide
+========================================================
+
+For more details on authoring R presentations please visit <https://support.rstudio.com/hc/en-us/articles/200486468>.
+
+- Bullet 1
+- Bullet 2
+- Bullet 3
+
+Slide With Code
+========================================================
+
+```{r listsummary, echo=FALSE}
+list_summary <- obs %>% 
+  group_by(subId, locName) %>% 
+  summarise(
+    num_species = n(),
+    tot_birds = sum(howMany)
+  )
+  
+park_summary1 <- list_summary %>% 
+  group_by(locName) %>% 
+  summarize(
+    num_lists = n(),
+    tot_birds = sum(tot_birds)
+  )
+
+park_summary2 <- obs %>% 
+  group_by(locName, comName) %>% 
+  summarise(
+    tot_birds = n()
+  ) %>% 
+  group_by(locName) %>% 
+  summarise(
+    tot_species = n()
+  )
+
+park_summary <- park_summary1 %>% 
+  inner_join(park_summary2)
+
+park_summary <- janitor::add_totals_row(park_summary)
+
+list_summary_tbl <- kable(park_summary, 
+             col.names = c('Park', "Lists", "Birds", "Species"),
+             caption = 'Five years of Wednesday morning birding') %>% 
+  kable_styling(bootstrap_options = c("striped")) %>% 
+  row_spec(5, bold = T, color = "white", background = "#5dade2")
+
+list_summary_tbl
+```
+
+Slide With Plot
+========================================================
+
+```{r, echo=FALSE}
+plot(cars)
+```
