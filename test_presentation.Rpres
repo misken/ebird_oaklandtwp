@@ -1,4 +1,4 @@
-test_presentation
+Five years of Wednesday birding
 ========================================================
 author: Mark Isken
 date: 2019-12-04
@@ -25,16 +25,30 @@ obs <- obs %>%
 obs$comFamily <- sub(".*[(](.*?)[)].*", "\\1", obs$FAMILY)
 ```
 
-First Slide
+How many unique species have we seen since 2015?
 ========================================================
+incremental: true
+(not counting week 5's)
+```{r tot_species, echo=FALSE}
+tot_species <- length(unique(obs$comName))
 
-For more details on authoring R presentations please visit <https://support.rstudio.com/hc/en-us/articles/200486468>.
+num_lists <- obs %>% 
+  group_by(subId) %>% 
+  count() %>% nrow()
 
-- Bullet 1
-- Bullet 2
-- Bullet 3
+tot_birds <- obs %>% 
+  summarize(
+    tot_birds = sum(howMany)
+  ) %>% pull()
+```
 
-Slide With Code
+- `r tot_species` species
+- `r num_lists` lists recorded 
+- and a total of `r sprintf("%i", tot_birds)` birds!
+
+
+
+Our four regular parks: 2015-2019
 ========================================================
 
 ```{r listsummary, echo=FALSE}
@@ -65,20 +79,175 @@ park_summary2 <- obs %>%
 park_summary <- park_summary1 %>% 
   inner_join(park_summary2)
 
-park_summary <- janitor::add_totals_row(park_summary)
+# park_summary <- janitor::add_totals_row(park_summary)
 
 list_summary_tbl <- kable(park_summary, 
              col.names = c('Park', "Lists", "Birds", "Species"),
              caption = 'Five years of Wednesday morning birding') %>% 
-  kable_styling(bootstrap_options = c("striped")) %>% 
-  row_spec(5, bold = T, color = "white", background = "#5dade2")
+  kable_styling(bootstrap_options = c("striped"))  
+  # %>% row_spec(5, bold = T, color = "white", background = "#5dade2")
 
 list_summary_tbl
 ```
 
-Slide With Plot
+Number of birds by month and year
 ========================================================
 
-```{r, echo=FALSE}
-plot(cars)
+```{r yrmo_summaries, echo=FALSE}
+sp_by_yrmo <- obs %>% 
+  group_by(birdingYrMo, locName) %>% 
+  summarise(
+    num_species = n(),
+    tot_birds = sum(howMany)
+  ) 
+
+fam_by_yr <- obs %>% 
+  group_by(birdingYr = year(birdingYrMo), comFamily) %>% 
+  summarise(
+    num_lists = n(),
+    tot_birds = sum(howMany)
+  )   
+```
+
+```{r sp_by_yrmo2, fig.width=12, echo=FALSE}
+sp_by_yrmo %>% 
+  ggplot() + geom_col(aes(x = month(birdingYrMo), y = tot_birds, fill = locName)) + guides(fill=FALSE) +
+  facet_grid(locName ~ year(birdingYrMo)) +
+  scale_x_continuous(labels = function(x) month.abb[x]) +
+  ylab("Number of birds counted") + xlab("")
+```
+
+Top 40 for 2019
+==============================
+```{r create_topobs_show, echo=FALSE}
+# Create num species by list df
+numsp_bylist <- obs %>%
+  group_by(year=year(obsDt), obsDt, locName, subId) %>%
+  summarize(
+    n = n(),
+    totbirds = sum(howMany)
+  ) %>% 
+  arrange(year, subId)
+
+# Using numsp_bylist, create num lists by date
+numlists_bydt <- numsp_bylist %>%
+  group_by(obsDt) %>%
+  summarise(
+    numlists = n()
+  ) %>%
+  filter(numlists >= 1) %>%
+  arrange(obsDt)
+
+# Usings numlists_bydt, create num lists by year
+numlists_byyear <- numlists_bydt %>%
+  group_by(birding_year=year(obsDt)) %>%
+  summarise(
+    totlists = sum(numlists)
+  )
+
+# Now ready to compute species by year
+species_byyear <- obs %>%
+  group_by(comName, comFamily, birding_year=year(obsDt)) %>%
+  summarize(
+    num_lists = n(),
+    tot_birds = sum(howMany)
+  ) %>%
+  arrange(birding_year, desc(tot_birds))
+
+# Join to numlists_byyear so we can compute pct of lists each species
+# appeared in.
+species_byyear <- left_join(species_byyear, numlists_byyear, by = 'birding_year') 
+
+bird_year <- 2019
+
+top_obs_byyear <- species_byyear %>%
+  filter(birding_year == bird_year) %>%
+  mutate(pctlists = num_lists / totlists) %>%
+  arrange(desc(tot_birds)) %>%
+  head(40)
+
+```
+
+```{r plot2019, echo=FALSE}
+ggplot(top_obs_byyear) + 
+    geom_bar(aes(x=reorder(comName, tot_birds), 
+                 y=tot_birds, fill=pctlists), stat = "identity") +
+                 scale_fill_gradient(low='#05D9F6', high='#5011D1') +
+                 labs(x="", 
+                      y="Total number of birds sighted", 
+                      fill="Pct of lists",
+                      title = paste0("Top 40 most sighted birds by Wednesday Birders in ", bird_year),
+                      subtitle = "(number at right of bar is % of lists on which the species appeared)") +
+                 coord_flip() +
+    geom_text(data=top_obs_byyear,
+              aes(x=reorder(comName,tot_birds),
+                  y=tot_birds,
+                  label=format(pctlists, digits = 1),
+                  hjust=0
+              ), size=3) + ylim(0,500)
+```
+
+Top 30 species over the years
+=============================
+
+```{r top_species_byyear, echo=FALSE}
+top_species_byyear <- top_obs_byyear %>% 
+  select("comName") %>% 
+  inner_join(species_byyear, by = "comName") %>% 
+  mutate(pctlists = num_lists / totlists)
+
+```
+
+
+```{r plot_sp_yr, fig.height=8, fig.width=12, echo=FALSE}
+ggplot(top_species_byyear) + 
+  geom_bar(aes(x = birding_year, y = tot_birds, fill=pctlists), 
+           stat = "identity") +
+  scale_fill_gradient(low='#05D9F6', high='#5011D1') +
+  ggtitle("Number of birds counted by year") +
+  facet_wrap(~comName, ncol = 5, scales = "free_y") +
+  labs(x="Year", 
+       y="Total number of birds sighted", 
+       fill="Pct of lists")
+```
+
+Top families over the years
+=============================
+```{r plot_fam_yr, fig.height=8, fig.width=10, echo=FALSE}
+ggplot(fam_by_yr) + 
+  geom_bar(aes(x = birdingYr, y = tot_birds, fill = num_lists), 
+           stat = "identity") +
+  scale_fill_gradient(low='#05D9F6', high='#5011D1') +
+  ggtitle("Number of birds counted by year") +
+  facet_wrap(~comFamily, ncol = 5, scales = "free_y") +
+  labs(x="Year", 
+       y="Total birds counted", 
+       fill="Number of lists") +
+  theme(axis.text.x  = element_text(angle=90, vjust=0.5),
+        strip.text.x = element_text(size=7))
+```
+
+Warblers over the years
+=============================
+
+```{r top_warbler_byyear, echo=FALSE}
+warblers_byyear <- obs %>% 
+  filter(comFamily == 'New World Warblers') %>% 
+  group_by(birdingYr = year(birdingYrMo), comName) %>% 
+  summarise(
+    num_lists = n(),
+    tot_birds = sum(howMany)
+  ) 
+
+```
+
+
+```{r plot_warbler_yr, fig.height=8, fig.width=12, echo=FALSE}
+ggplot(warblers_byyear) + 
+  geom_bar(aes(x = birdingYr, y = tot_birds, fill=comName), 
+           stat = "identity") +
+  ggtitle("Number of birds counted by year") +
+  labs(x="Year", 
+       y="Total number of birds sighted", 
+       fill="Species")
 ```

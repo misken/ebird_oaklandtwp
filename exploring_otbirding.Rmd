@@ -12,7 +12,93 @@ library(stringr)
 
 ```{r}
 obs <- readRDS("data/observations.rds")
+
+ebird_tax <- read.csv('rawdata/eBird_Taxonomy_v2019.csv', sep = '\t')
+
+obs <- obs %>% 
+  inner_join(ebird_tax, by = c('speciesCode' = 'SPECIES_CODE'))
+
+obs$comFamily <- sub(".*[(](.*?)[)].*", "\\1", obs$FAMILY)
 ```
+
+# Grand totals
+
+```{r}
+num_lists <- obs %>% 
+  group_by(subId) %>% 
+  count() %>% nrow()
+
+num_lists
+```
+
+```{r}
+tot_birds <- obs %>% 
+  summarize(
+    tot_birds = sum(howMany)
+  ) %>% pull()
+
+tot_birds
+```
+
+```{r}
+tot_species <- length(unique(obs$comName))
+tot_species
+```
+
+Which birds did we see the most of?
+
+```{r}
+obs %>% 
+  group_by(comName) %>% 
+  summarize(
+    tot_birds = sum(howMany)
+  ) %>% 
+  arrange(desc(tot_birds))
+```
+
+# List summary 
+
+```{r}
+list_summary <- obs %>% 
+  group_by(subId, locName) %>% 
+  summarise(
+    num_species = n(),
+    tot_birds = sum(howMany)
+  )
+  
+park_summary1 <- list_summary %>% 
+  group_by(locName) %>% 
+  summarize(
+    num_lists = n(),
+    tot_birds = sum(tot_birds)
+  )
+
+park_summary1  
+
+park_summary2 <- obs %>% 
+  group_by(locName, comName) %>% 
+  summarise(
+    tot_birds = n()
+  ) %>% 
+  group_by(locName) %>% 
+  summarise(
+    tot_species = n()
+  )
+  
+park_summary2
+
+park_summary <- park_summary1 %>% 
+  inner_join(park_summary2)
+
+park_summary <- janitor::add_totals_row(park_summary)
+
+knitr::kable(park_summary, 
+             col.names = c('Park', "Lists", "Birds", "Species"),
+             caption = 'Five years of Wednesday morning birding') %>% 
+  kableExtra::kable_styling(bootstrap_options = c("striped")) %>% 
+  kableExtra::row_spec(5, bold = T, color = "white", background = "#5dade2")
+```
+
 
 # How many different bird 
 
@@ -26,20 +112,84 @@ sp_bydate <- obs %>%
 ```
 
 ```{r}
+sp_by_yrmo <- obs %>% 
+  group_by(birdingYrMo, locName) %>% 
+  summarise(
+    num_species = n(),
+    tot_birds = sum(howMany)
+  ) 
+  
+```
+
+```{r}
+fam_by_yrmo <- obs %>% 
+  group_by(year(birdingYrMo), comFamily) %>% 
+  summarise(
+    num_lists = n(),
+    tot_birds = sum(howMany)
+  ) 
+  
+```
+
+```{r}
+sp_by_yrmo %>% 
+  filter(locName == 'Draper Twin Lake Park')
+```
+
+
+```{r}
 sp_bydate %>% 
   group_by(locName) %>% 
   count()
 ```
 
 
-```{r}
-sp_bydate %>% 
-  filter(str_detect(locName, 'Draper'))
-```
+
 
 ```{r fig.width=12}
-sp_bydate %>% 
-  filter(str_detect(locName, 'Draper')) %>% 
-ggplot() + geom_line(aes(x = birdingDt, y = num_species, fill = locName)) 
+sp_by_yrmo %>% 
+  ggplot() + geom_col(aes(x = birdingYrMo, y = num_species, fill = locName)) +
+  facet_grid(locName ~ .) + guides(fill=FALSE) +
+  scale_x_date(date_breaks = "3 months", date_labels = "%b\n%Y",
+               limits = as.Date(c('2015-01-01','2020-01-01')))
 ```
 
+```{r sp_by_yrmo1, fig.width=12}
+sp_by_yrmo %>% 
+  ggplot() + geom_col(aes(x = month(birdingYrMo), y = num_species, fill = locName)) + guides(fill=FALSE) +
+  facet_grid(locName ~ year(birdingYrMo)) +
+  scale_x_continuous(labels = function(x) month.abb[x]) +
+  ylab("Number of species") + xlab("Month")
+```
+
+```{r sp_by_yrmo2, fig.width=12}
+sp_by_yrmo %>% 
+  ggplot() + geom_col(aes(x = month(birdingYrMo), y = tot_birds, fill = locName)) + guides(fill=FALSE) +
+  facet_grid(locName ~ year(birdingYrMo)) +
+  scale_x_continuous(labels = function(x) month.abb[x]) +
+  ylab("Number of birds counted") + xlab("")
+```
+
+```{r}
+fam_by_yrmo <- obs %>% 
+  group_by(year = year(birdingYrMo), comFamily) %>% 
+  summarise(
+    num_lists = n(),
+    tot_birds = sum(howMany)
+  ) 
+  
+```
+
+```{r fig.height=10, fig.width=10}
+ggplot(fam_by_yrmo) + 
+  geom_bar(aes(x = year, y = tot_birds, fill = num_lists), 
+           stat = "identity") +
+  scale_fill_gradient(low='#05D9F6', high='#5011D1') +
+  ggtitle("Number of birds counted by year") +
+  facet_wrap(~comFamily, ncol = 5, scales = "free_y") +
+  labs(x="Year", 
+       y="Total birds counted", 
+       fill="Number of lists") +
+  theme(axis.text.x  = element_text(angle=90, vjust=0.5),
+        strip.text.x = element_text(size=7))
+```

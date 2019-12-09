@@ -30,8 +30,9 @@ obs_df <- bind_rows(obs_2015_2017, obs_2018, obs_2019)
 
 # Create new fields and do factor conversions
 
-# Create birding date
+# Create birding date fields
 obs_df$birdingDt <- as.Date(obs_df$obsDt)
+obs_df$birdingYrMo <- make_date(year(obs_df$birdingDt), month(obs_df$birdingDt), 1)
 
 # Convert some chr fields to factors
 obs_df$comName <- factor(obs_df$comName)
